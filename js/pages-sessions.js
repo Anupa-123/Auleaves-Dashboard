@@ -281,11 +281,11 @@ function buildParticipantPanel(session) {
                 <th>Phone</th>
                 <th>Cup</th>
                 <th>First Time</th>
+                <th>Status</th>
                 <th>Cycle 1</th>
                 <th>Cycle 2</th>
                 <th>Cycle 3</th>
                 <th>WhatsApp</th>
-                <th>Adoption</th>
                 <th>Reason</th>
                 <th>Notes</th>
                 <th></th>
@@ -317,28 +317,23 @@ function buildParticipantRow(ben, allRecords) {
   const c2Status    = c2 ? c2.status : (c1 && c1.status === 'done' ? 'pending' : 'locked');
   const c3Status    = c3 ? c3.status : (c2 && c2.status === 'done' ? 'pending' : 'locked');
 
-  const adoptionStatus = DB._getBenAdoptionStatus(ben.id, allRecords);
-  const showReason     = adoptionStatus === 'not-adopted';
+  const benStatus = ben.usageStatus || 'not-tried';
+  const showReason = c3Status === 'not-adopted';
 
   const cycleOptions = (cycleNum) => {
     if (cycleNum === 1) return [
       { value: 'pending', label: 'Pending' },
-      { value: 'tried-successful', label: 'Tried but successful' },
       { value: 'successful', label: 'Successful' },
-      { value: 'not-tried', label: 'Not tried at all' },
-      { value: 'other-issues', label: 'Other issues' },
-      { value: 'done', label: 'FU for Cycle 2' }
+      { value: 'fu-cycle-2', label: 'FU for Cycle 2' }
     ];
     if (cycleNum === 2) return [
       { value: 'pending', label: 'Pending' },
       { value: 'successful', label: 'Successful' },
-      { value: 'not-tried', label: 'Not tried at all' },
-      { value: 'other-issues', label: 'Other issues' },
-      { value: 'done', label: 'FU for Cycle 3' }
+      { value: 'fu-cycle-3', label: 'FU for Cycle 3' }
     ];
     return [
       { value: 'pending', label: 'Pending' },
-      { value: 'done', label: 'Adopted' },
+      { value: 'adopted', label: 'Adopted' },
       { value: 'not-adopted', label: 'Not Adopted' }
     ];
   };
@@ -368,17 +363,18 @@ function buildParticipantRow(ben, allRecords) {
     <td>${ben.firstTimeUser
       ? '<span class="first-badge">First</span>'
       : '<span class="return-badge">Return</span>'}</td>
+    <td>
+      <select class="adoption-select" onchange="updateBenUsageStatus('${ben.id}', '${ben.sessionId}', this.value)">
+        <option value="tried-successful" ${benStatus==='tried-successful' ? 'selected' : ''}>Tried but successful</option>
+        <option value="successful"       ${benStatus==='successful' ? 'selected' : ''}>Successful</option>
+        <option value="not-tried"        ${benStatus==='not-tried' ? 'selected' : ''}>Not tried at all</option>
+        <option value="other-issues"     ${benStatus==='other-issues' ? 'selected' : ''}>Other issues</option>
+      </select>
+    </td>
     <td>${cycleDropdown(1, c1, c1Status, false)}</td>
     <td>${cycleDropdown(2, c2, c2Status, c2Status === 'locked')}</td>
     <td>${cycleDropdown(3, c3, c3Status, c3Status === 'locked')}</td>
     <td><div class="wa-indicators">${whatsappIndicators(ben.id)}</div></td>
-    <td>
-      <select class="adoption-select" onchange="updateAdoptionStatus('${ben.id}','${ben.id}',this.value)">
-        <option value="tracking"    ${adoptionStatus==='tracking'    ? 'selected' : ''}>Tracking</option>
-        <option value="adopted"     ${adoptionStatus==='adopted'     ? 'selected' : ''}>Adopted</option>
-        <option value="not-adopted" ${adoptionStatus==='not-adopted' ? 'selected' : ''}>Not Adopted</option>
-      </select>
-    </td>
     <td id="reason-cell-${ben.id}">
       ${showReason ? reasonDropdown(ben.id, benRecords) : '<span style="color:rgba(255,255,255,0.2)">—</span>'}
     </td>
@@ -550,6 +546,12 @@ function updateCycleStatus(benId, companyId, sessionId, cycleNum, existingRecord
   refreshParticipantPanel(sessionId);
   updateBadges();
   showToast(`Cycle ${cycleNum} updated`);
+}
+
+function updateBenUsageStatus(benId, sessionId, status) {
+  DB.updateBeneficiary(benId, { usageStatus: status });
+  if (sessionId) refreshParticipantPanel(sessionId);
+  showToast('Usage status updated');
 }
 
 function updateAdoptionStatus(benId, _unused, newStatus) {
