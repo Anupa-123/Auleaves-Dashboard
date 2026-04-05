@@ -119,19 +119,86 @@ function renderDashboard() {
       </div>
     </div>`;
 
+  // Month Progress Cards
+  const monthCardsHtml = `
+    <div class="month-grid">
+      <div class="month-card">
+        <div class="month-label">Month 1 · Awareness</div>
+        <div class="month-value text-rose">${stats.totalAttended}</div>
+        <div class="month-desc">Women attended sessions</div>
+        <div class="month-bar"><div class="month-bar-fill" style="width:100%;background:var(--rose)"></div></div>
+        <div class="month-watermark">M1</div></div>
+      <div class="month-card">
+        <div class="month-label">Month 2 · Purchase</div>
+        <div class="month-value text-sage">${stats.totalCups}</div>
+        <div class="month-desc">Cups purchased / distributed</div>
+        <div class="month-bar"><div class="month-bar-fill" style="width:${stats.totalAttended > 0 ? (stats.totalCups/stats.totalAttended*100) : 0}%;background:var(--sage)"></div></div>
+        <div class="month-watermark">M2</div></div>
+      <div class="month-card">
+        <div class="month-label">Month 3 · Active Use</div>
+        <div class="month-value text-warning">${stats.cycle3Completions}</div>
+        <div class="month-desc">Confirmed active users</div>
+        <div class="month-bar"><div class="month-bar-fill" style="width:${stats.registeredBeneficiaries > 0 ? (stats.cycle3Completions/stats.registeredBeneficiaries*100) : 0}%;background:var(--warning)"></div></div>
+        <div class="month-watermark">M3</div></div>
+    </div>`;
+
+  // Charts — Session & Cup Trend + Adoption Funnel
+  const funnel = DB.getImpactFunnel(cid);
+  const chartsHtml = `
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Session & Cup Trend</div>
+            <div class="chart-subtitle">Monthly distribution across programme</div></div>
+          <div class="chart-legend">
+            <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--chart-gold)"></div> Sessions</div>
+            <div class="chart-legend-item"><div class="chart-legend-dot" style="background:var(--chart-rose)"></div> Cups</div>
+          </div>
+        </div>
+        <div class="chart-container"><canvas id="trendChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Adoption Funnel</div>
+            <div class="chart-subtitle">Stage-wise tracking</div></div>
+        </div>
+        <div class="funnel-list">
+          ${renderDashboardFunnel(funnel)}
+        </div>
+      </div>
+    </div>`;
+
   return `
     <div class="page-header">
       <div>
         <h1>Overview Dashboard</h1>
         <div class="page-subtitle">Auleaves Freedom Circle Program Tracking</div>
       </div>
-      <div>
-        <button class="btn btn-secondary" onclick="DB.addNotification({message:'Hey'})">Sync Data</button>
-      </div>
     </div>
     ${overdueBanner}
     ${cardsHtml}
+    ${monthCardsHtml}
+    ${chartsHtml}
     ${companyTableHtml}
     ${activityHtml}
   `;
+}
+
+function renderDashboardFunnel(funnel) {
+  const maxVal = Math.max(funnel.attended, 1);
+  const stages = [
+    { label: 'Attended', value: funnel.attended, color: 'var(--chart-rose)' },
+    { label: 'Purchased', value: funnel.cupsPurchased, color: 'var(--chart-gold)' },
+    { label: 'Registered', value: funnel.registered, color: 'var(--chart-sage)' },
+    { label: 'Month 1 Use', value: funnel.month1Using, color: 'var(--chart-blue)' },
+    { label: 'Month 2 Use', value: funnel.month2Using, color: 'var(--chart-coral)' },
+    { label: 'Month 3 Use', value: funnel.month3Using, color: 'var(--chart-purple)' },
+    { label: 'Recommended', value: funnel.recommended, color: 'var(--sage-light)' }
+  ];
+  return stages.map(s => `
+    <div class="funnel-row">
+      <div class="funnel-label">${s.label}</div>
+      <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:${(s.value/maxVal*100)}%;background:${s.color}"></div></div>
+      <div class="funnel-value">${s.value}</div>
+    </div>`).join('');
 }
