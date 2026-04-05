@@ -292,6 +292,11 @@ const DB = {
     this._set(this.KEYS.beneficiaries, bens);
   },
 
+  deleteBeneficiary(id) {
+    const bens = this.getBeneficiaries().filter(b => b.id !== id);
+    this._set(this.KEYS.beneficiaries, bens);
+  },
+
   getBenAdoptionStatus(benId) {
     return this._getBenAdoptionStatus(benId);
   },

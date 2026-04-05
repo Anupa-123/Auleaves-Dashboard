@@ -145,12 +145,14 @@ function renderSessions() {
       </select>
     </div>`;
 
-  const tableRows = sessions.map(session => buildSessionRow(session)).join('');
+  const isAdmin = currentUser.role === 'admin';
+  const tableRows = sessions.map(session => buildSessionRow(session, isAdmin)).join('');
+  const colCount = isAdmin ? 10 : 9;
 
   return `
     <div class="page-header" style="margin-bottom:0">
       <h1>Sessions</h1>
-      ${currentUser.role === 'admin' ? `<button class="btn btn-primary" onclick="navigateTo('log-session')">+ Log Session</button>` : ''}
+      ${isAdmin ? `<button class="btn btn-primary" onclick="navigateTo('log-session')">+ Log Session</button>` : ''}
     </div>
     ${summaryBar}
     ${overdueBanner}
@@ -160,20 +162,20 @@ function renderSessions() {
         <table class="data-table sessions-table" id="sessionsTable">
           <thead>
             <tr>
-              <th>Date</th><th>Facilitator</th><th>Department</th><th>Type</th>
+              <th>Date</th><th>Facilitator</th>${isAdmin ? '<th>Department</th>' : ''}<th>Type</th>
               <th>Status</th><th>Attended</th><th>Cups</th><th>Conv%</th>
               <th>Adopted</th><th style="width:40px"></th>
             </tr>
           </thead>
           <tbody id="sessionsBody">
-            ${tableRows || '<tr><td colspan="10" class="empty-cell">No sessions logged yet.</td></tr>'}
+            ${tableRows || `<tr><td colspan="${colCount}" class="empty-cell">No sessions logged yet.</td></tr>`}
           </tbody>
         </table>
       </div>
     </div>`;
 }
 
-function buildSessionRow(session) {
+function buildSessionRow(session, isAdmin) {
   const status = DB.computeSessionStatus(session.id);
   const stats  = DB.getSessionAdoptionStats(session.id);
   const conv   = session.womenAttended > 0
@@ -186,6 +188,7 @@ function buildSessionRow(session) {
   const sessionType = session.sessionType
     ? session.sessionType.split(' ').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')
     : '—';
+  const colCount = isAdmin ? 10 : 9;
 
   return `
     <tr class="session-row" id="sr-${session.id}"
@@ -195,7 +198,7 @@ function buildSessionRow(session) {
         data-search="${(session.facilitator + ' ' + session.department + ' ' + session.sessionType).toLowerCase()}">
       <td>${DB.formatDate(session.sessionDate)}</td>
       <td><strong>${session.facilitator || '—'}</strong></td>
-      <td style="color:rgba(255,255,255,0.5);font-size:12px">${session.department || '—'}</td>
+      ${isAdmin ? `<td style="color:rgba(255,255,255,0.5);font-size:12px">${session.department || '—'}</td>` : ''}
       <td style="font-size:12px">${sessionType}</td>
       <td>${statusPill(status)}</td>
       <td>${session.womenAttended || 0}</td>
@@ -212,7 +215,7 @@ function buildSessionRow(session) {
       </td>
     </tr>
     <tr class="expand-row hidden" id="expand-${session.id}">
-      <td colspan="10" style="padding:0;background:#0f0f1e;border-top:1px solid rgba(255,255,255,0.05)">
+      <td colspan="${colCount}" style="padding:0;background:#0f0f1e;border-top:1px solid rgba(255,255,255,0.05)">
         <div class="participant-panel" id="panel-${session.id}">
           ${buildParticipantPanel(session)}
         </div>
@@ -299,6 +302,7 @@ function buildParticipantPanel(session) {
                 <th>Adoption</th>
                 <th>Reason</th>
                 <th>Notes</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -372,6 +376,7 @@ function buildParticipantRow(ben, allRecords) {
     </td>
     <td><input class="notes-input" placeholder="Notes…" value="${ben.notes || ''}"
          onblur="saveBenNotes('${ben.id}',this.value)"></td>
+    <td><button class="btn-delete-ben" onclick="deleteBeneficiary('${ben.id}','${ben.sessionId}')" title="Delete beneficiary">🗑</button></td>
   </tr>`;
 }
 
@@ -571,6 +576,28 @@ function saveNonAdoptionReason(benId, reason) {
 
 function saveBenNotes(benId, notes) {
   DB.updateBeneficiary(benId, { notes });
+}
+
+function deleteBeneficiary(benId, sessionId) {
+  const ben = DB.getBeneficiary(benId);
+  if (!ben) return;
+  if (!confirm(`Delete "${ben.fullName}" (${ben.fcpId})? This will also remove all their cycle records. This cannot be undone.`)) return;
+
+  // Delete cycle records for this beneficiary
+  const records = DB.getCycleRecords().filter(r => r.beneficiaryId !== benId);
+  DB._set(DB.KEYS.cycleRecords, records);
+
+  // Delete WhatsApp log entries
+  const waLog = DB.getWhatsappLog().filter(l => l.beneficiaryId !== benId);
+  DB._set(DB.KEYS.whatsappLog, waLog);
+
+  // Delete the beneficiary
+  DB.deleteBeneficiary(benId);
+
+  // Refresh the panel
+  if (sessionId) refreshParticipantPanel(sessionId);
+  showToast(`${ben.fullName} deleted`);
+  updateBadges();
 }
 
 // ============================================================

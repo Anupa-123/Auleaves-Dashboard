@@ -1943,6 +1943,22 @@ textarea.form-control {
 }
 .reason-tag strong { color: var(--text-primary); }
 
+/* Delete Beneficiary Button */
+.btn-delete-ben {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.2);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+.btn-delete-ben:hover {
+  color: #EF5350;
+  background: rgba(239,83,80,0.1);
+}
+
 /* Activity Panel */
 .activity-panel {
   background: var(--bg-card);
