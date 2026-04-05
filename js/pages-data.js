@@ -213,10 +213,15 @@ function showAddFollowupModal() {
   openModal('Submit Monthly Check-in', `
     <form onsubmit="return submitFollowup(event)">
       <div class="form-grid">
-        <div class="form-group full-width"><label>Beneficiary <span class="required">*</span></label>
+        <div class="form-group full-width">
+          <label style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Beneficiary <span class="required">*</span></span>
+            <button type="button" onclick="closeModal(); setTimeout(showAddBeneficiaryModal, 300)" style="background:none; border:none; color:var(--rose-light); font-size:12px; cursor:pointer;" title="Register a new beneficiary">+ Add New Beneficiary</button>
+          </label>
           <select class="form-control" id="fu_ben" required>
-            ${bens.map(b => `<option value="${b.id}">${b.fcpId} — ${b.fullName}</option>`).join('')}
-          </select></div>
+            ${bens.length === 0 ? '<option value="">No beneficiaries found. Please add one first.</option>' : bens.map(b => `<option value="${b.id}">${b.fcpId} — ${b.fullName}</option>`).join('')}
+          </select>
+        </div>
         <div class="form-group"><label>Month <span class="required">*</span></label>
           <select class="form-control" id="fu_month" required><option value="1">Month 1</option><option value="2">Month 2</option><option value="3">Month 3</option></select></div>
         <div class="form-group"><label>Date</label>
