@@ -142,26 +142,41 @@ function viewBeneficiary(id) {
 function renderFollowups() {
   const cid = getCompanyId();
   const bens = cid ? DB.getBeneficiariesByCompany(cid) : DB.getBeneficiaries();
-  const followups = cid ? DB.getFollowupsByCompany(cid) : DB.getFollowups();
   const isAdmin = currentUser.role === 'admin';
+
+  // Use new cycleRecords API (with fallback to old followups for compatibility)
+  let records;
+  if (typeof DB.getCycleRecords === 'function') {
+    records = cid ? DB.getCyclesByCompany(cid) : DB.getCycleRecords();
+  } else {
+    records = cid ? DB.getFollowupsByCompany(cid) : DB.getFollowups();
+  }
+
   const compMap = {}; DB.getCompanies().forEach(c => compMap[c.id] = c.name);
   const benMap = {}; DB.getBeneficiaries().forEach(b => benMap[b.id] = b);
 
-  // Find overdue (no month 3 data)
-  const overdueCount = bens.filter(b => !DB.hasFollowup(b.id, 3)).length;
+  // Overdue count
+  const overdueCount = bens.filter(b => {
+    const benRecords = records.filter(r => r.beneficiaryId === b.id);
+    return !benRecords.some(r => (r.cycleNumber === 3 || r.month === 3));
+  }).length;
 
-  const rows = followups.sort((a,b) => new Date(b.loggedAt) - new Date(a.loggedAt)).map(f => {
+  const rows = records.sort((a,b) => new Date(b.loggedAt || b.timestamp || 0) - new Date(a.loggedAt || a.timestamp || 0)).map(f => {
     const ben = benMap[f.beneficiaryId];
+    const cycleNum = f.cycleNumber || f.month || '—';
+    const usageStatus = f.usageStatus || f.status || '—';
+    const verified = f.verifiedByAuleaves || f.verified;
+    const recommended = f.recommendedToOthers || '—';
     return `<tr>
       <td>${ben ? ben.fcpId : '—'}</td>
       <td>${ben ? ben.fullName : '—'}</td>
       <td>${compMap[f.companyId] || '—'}</td>
-      <td><span class="badge badge-info">Month ${f.month}</span></td>
-      <td>${getStatusBadge(f.usageStatus)}</td>
-      <td>${f.recommendedToOthers === 'yes' ? '<span class="badge badge-success">Yes</span>' : f.recommendedToOthers === 'no' ? '<span class="badge badge-danger">No</span>' : '<span class="badge badge-muted">Not sure</span>'}</td>
-      <td>${f.verified ? '<span class="badge badge-success">✓ Verified</span>' : '<span class="badge badge-warning">Pending</span>'}</td>
+      <td><span class="badge badge-info">Cycle ${cycleNum}</span></td>
+      <td>${getStatusBadge(usageStatus)}</td>
+      <td>${recommended === 'yes' ? '<span class="badge badge-success">Yes</span>' : recommended === 'no' ? '<span class="badge badge-danger">No</span>' : '<span class="badge badge-muted">Not sure</span>'}</td>
+      <td>${verified ? '<span class="badge badge-success">✓ Verified</span>' : '<span class="badge badge-warning">Pending</span>'}</td>
       <td>
-        ${isAdmin && !f.verified ? `<button class="btn btn-sm btn-sage" onclick="verifyFollowup('${f.id}')">✓ Verify</button>` : ''}
+        ${isAdmin && !verified ? `<button class="btn btn-sm btn-sage" onclick="verifyFollowup('${f.id}')">✓ Verify</button>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -169,17 +184,17 @@ function renderFollowups() {
   return `<div class="page-header"><h1>Follow-up Check-ins</h1>
     <div class="d-flex gap-8">
       <button class="btn btn-primary" onclick="showAddFollowupModal()">+ Submit Check-in</button>
-      ${overdueCount > 0 ? `<span class="badge badge-warning" style="font-size:12px;padding:6px 12px">⚠ ${overdueCount} overdue (no Month 3)</span>` : ''}
+      ${overdueCount > 0 ? `<span class="badge badge-warning" style="font-size:12px;padding:6px 12px">⚠ ${overdueCount} overdue (no Cycle 3)</span>` : ''}
     </div></div>
     <div class="table-card">
       <div class="table-toolbar"><div class="toolbar-left">
         <div class="search-wrapper"><input type="text" class="search-input" placeholder="Search..." oninput="filterTable(this, 'fupTable')"></div>
         <select class="filter-select" onchange="filterFollowupsByMonth(this.value)">
-          <option value="">All Months</option><option value="1">Month 1</option><option value="2">Month 2</option><option value="3">Month 3</option>
+          <option value="">All Cycles</option><option value="1">Cycle 1</option><option value="2">Cycle 2</option><option value="3">Cycle 3</option>
         </select>
-      </div><div class="toolbar-right"><span class="text-muted">${followups.length} records</span></div></div>
+      </div><div class="toolbar-right"><span class="text-muted">${records.length} records</span></div></div>
       <div class="table-overflow"><table class="data-table" id="fupTable"><thead><tr>
-        <th>FCP ID</th><th>Name</th><th>Company</th><th>Month</th><th>Status</th><th>Referred</th><th>Verified</th><th>Actions</th>
+        <th>FCP ID</th><th>Name</th><th>Company</th><th>Cycle</th><th>Status</th><th>Referred</th><th>Verified</th><th>Actions</th>
       </tr></thead><tbody>${rows}</tbody></table></div>
     </div>`;
 }
@@ -188,9 +203,13 @@ function getStatusBadge(status) {
   const map = {
     'using comfortably': 'badge-success',
     'using with some issues': 'badge-warning',
+    'done': 'badge-success',
+    'stopped': 'badge-danger',
     'stopped — discomfort': 'badge-danger',
     'stopped — other reason': 'badge-danger',
     'not yet tried': 'badge-muted',
+    'not-adopted': 'badge-danger',
+    'pending': 'badge-muted',
     'lost/needs replacement': 'badge-danger'
   };
   return `<span class="badge ${map[status] || 'badge-muted'}">${status}</span>`;
@@ -213,27 +232,40 @@ function showAddFollowupModal() {
   openModal('Submit Monthly Check-in', `
     <form onsubmit="return submitFollowup(event)">
       <div class="form-grid">
-        <div class="form-group full-width">
-          <label style="display:flex; justify-content:space-between; align-items:center;">
-            <span>Beneficiary <span class="required">*</span></span>
-            <button type="button" onclick="closeModal(); setTimeout(showAddBeneficiaryModal, 300)" style="background:none; border:none; color:var(--rose-light); font-size:12px; cursor:pointer;" title="Register a new beneficiary">+ Add New Beneficiary</button>
-          </label>
-          <select class="form-control" id="fu_ben" required>
-            ${bens.length === 0 ? '<option value="">No beneficiaries found. Please add one first.</option>' : bens.map(b => `<option value="${b.id}">${b.fcpId} — ${b.fullName}</option>`).join('')}
-          </select>
+        <div class="form-group full-width"><label>Beneficiary <span class="required">*</span></label>
+          <select class="form-control" id="fu_ben" required onchange="onFollowupBenChange(this.value)">
+            ${bens.map(b => `<option value="${b.id}">${b.fcpId} — ${b.fullName}</option>`).join('')}
+            <option value="__new__" style="color:#C2185B;font-weight:600">➕ Register New Beneficiary…</option>
+          </select></div>
+
+        <div id="newBenFields" class="hidden" style="grid-column:1/-1">
+          <div style="background:rgba(194,24,91,0.06);border:1px solid rgba(194,24,91,0.2);border-radius:8px;padding:16px;margin-bottom:16px">
+            <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#E91E72;margin-bottom:12px;font-weight:600">New Beneficiary Details</div>
+            <div class="form-grid">
+              <div class="form-group"><label>Full Name <span class="required">*</span></label><input type="text" class="form-control" id="fu_new_name" placeholder="Full name"></div>
+              <div class="form-group"><label>Phone <span class="required">*</span></label><input type="tel" class="form-control" id="fu_new_phone" placeholder="10-digit number"></div>
+              <div class="form-group"><label>Age Group</label>
+                <select class="form-control" id="fu_new_age"><option value="18-24">18–24</option><option value="25-34" selected>25–34</option><option value="35-44">35–44</option><option value="45+">45+</option></select></div>
+              <div class="form-group"><label>Cup Size</label>
+                <select class="form-control" id="fu_new_cup"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large</option></select></div>
+              <div class="form-group"><label>First-time User?</label>
+                <select class="form-control" id="fu_new_first"><option value="yes">Yes</option><option value="no">No</option></select></div>
+              <div class="form-group"><label>Language</label>
+                <select class="form-control" id="fu_new_lang"><option>Hindi</option><option>English</option><option>Marathi</option><option>Telugu</option><option>Kannada</option><option>Tamil</option><option>Bengali</option><option>Gujarati</option></select></div>
+            </div>
+          </div>
         </div>
-        <div class="form-group"><label>Month <span class="required">*</span></label>
-          <select class="form-control" id="fu_month" required><option value="1">Month 1</option><option value="2">Month 2</option><option value="3">Month 3</option></select></div>
+
+        <div class="form-group"><label>Cycle <span class="required">*</span></label>
+          <select class="form-control" id="fu_month" required><option value="1">Cycle 1</option><option value="2">Cycle 2</option><option value="3">Cycle 3</option></select></div>
         <div class="form-group"><label>Date</label>
           <input type="date" class="form-control" id="fu_date" value="${new Date().toISOString().split('T')[0]}"></div>
         <div class="form-group full-width"><label>Usage Status <span class="required">*</span></label>
           <select class="form-control" id="fu_status" required>
             <option value="using comfortably">Using comfortably</option>
             <option value="using with some issues">Using with some issues</option>
-            <option value="stopped — discomfort">Stopped — discomfort</option>
-            <option value="stopped — other reason">Stopped — other reason</option>
+            <option value="stopped">Stopped</option>
             <option value="not yet tried">Not yet tried</option>
-            <option value="lost/needs replacement">Lost / Needs replacement</option>
           </select></div>
         <div class="form-group"><label>Recommended to Others?</label>
           <select class="form-control" id="fu_recommend"><option value="yes">Yes</option><option value="no">No</option><option value="not sure">Not sure</option></select></div>
@@ -247,33 +279,84 @@ function showAddFollowupModal() {
     </form>`);
 }
 
+function onFollowupBenChange(value) {
+  const newBenFields = document.getElementById('newBenFields');
+  if (value === '__new__') {
+    newBenFields.classList.remove('hidden');
+  } else {
+    newBenFields.classList.add('hidden');
+  }
+}
+
 function submitFollowup(e) {
   e.preventDefault();
-  const benId = document.getElementById('fu_ben').value;
-  const ben = DB.getBeneficiary(benId);
-  const result = DB.addFollowup({
-    beneficiaryId: benId,
-    companyId: ben ? ben.companyId : getCompanyId(),
-    month: parseInt(document.getElementById('fu_month').value),
-    date: document.getElementById('fu_date').value,
-    usageStatus: document.getElementById('fu_status').value,
-    recommendedToOthers: document.getElementById('fu_recommend').value,
-    notes: document.getElementById('fu_notes').value,
-    loggedByName: currentUser.name,
-    loggedByRole: currentUser.role
-  });
-  if (result.error) {
+  let benId = document.getElementById('fu_ben').value;
+  let ben;
+
+  // If "Register New" was selected, create beneficiary first
+  if (benId === '__new__') {
+    const name  = document.getElementById('fu_new_name')?.value?.trim();
+    const phone = document.getElementById('fu_new_phone')?.value?.trim();
+    if (!name || !phone) { showToast('Name and phone are required for new beneficiary', 'error'); return false; }
+
+    const cid = getCompanyId();
+    ben = DB.addBeneficiary({
+      companyId:         cid,
+      sessionId:         '',
+      fullName:          name,
+      phone:             phone,
+      ageGroup:          document.getElementById('fu_new_age')?.value || '25-34',
+      cupSize:           document.getElementById('fu_new_cup')?.value || 'medium',
+      firstTimeUser:     document.getElementById('fu_new_first')?.value === 'yes',
+      language:          document.getElementById('fu_new_lang')?.value || 'Hindi',
+      consentRecordedBy: currentUser.name,
+      consentDate:       new Date().toISOString().split('T')[0],
+      registeredBy:      currentUser.role
+    });
+    benId = ben.id;
+    showToast('New beneficiary registered: ' + ben.fcpId);
+  } else {
+    ben = DB.getBeneficiary(benId);
+  }
+
+  const cycleNum = parseInt(document.getElementById('fu_month').value);
+  const usageStatus = document.getElementById('fu_status').value;
+
+  // Use new addCycleRecord if available, fallback to addFollowup
+  let result;
+  if (typeof DB.addCycleRecord === 'function') {
+    const status = usageStatus === 'using comfortably' || usageStatus === 'using with some issues' ? 'done' : 'not-adopted';
+    result = DB.addCycleRecord({
+      beneficiaryId: benId,
+      companyId: ben ? ben.companyId : getCompanyId(),
+      cycleNumber: cycleNum,
+      status: status,
+      usageStatus: usageStatus,
+      checkInDate: document.getElementById('fu_date').value,
+      recommendedToOthers: document.getElementById('fu_recommend').value,
+      facilitatorNotes: document.getElementById('fu_notes').value,
+      loggedByName: currentUser.name,
+      loggedBy: currentUser.role
+    });
+  } else {
+    result = DB.addFollowup({
+      beneficiaryId: benId,
+      companyId: ben ? ben.companyId : getCompanyId(),
+      month: cycleNum,
+      date: document.getElementById('fu_date').value,
+      usageStatus: usageStatus,
+      recommendedToOthers: document.getElementById('fu_recommend').value,
+      notes: document.getElementById('fu_notes').value,
+      loggedByName: currentUser.name,
+      loggedByRole: currentUser.role
+    });
+  }
+
+  if (result && result.error) {
     showToast(result.error, 'error');
     return false;
   }
-  // Send email notification for company submissions
-  const comp = DB.getCompany(ben ? ben.companyId : getCompanyId());
-  sendDataEmail(
-    comp ? comp.name : 'Unknown',
-    currentUser.name,
-    `Month ${document.getElementById('fu_month').value} Follow-up Check-in`,
-    `Beneficiary: ${ben ? ben.fcpId + ' - ' + ben.fullName : 'Unknown'}\nStatus: ${document.getElementById('fu_status').value}`
-  );
+
   closeModal();
   showToast('Check-in submitted!');
   navigateTo('followups');
@@ -281,7 +364,12 @@ function submitFollowup(e) {
 }
 
 function verifyFollowup(id) {
-  DB.verifyFollowup(id, currentUser.name);
+  if (typeof DB.verifyCycleRecord === 'function') {
+    DB.verifyCycleRecord(id, currentUser.name);
+  } else {
+    DB.verifyFollowup(id, currentUser.name);
+  }
   showToast('Follow-up verified!');
   navigateTo('followups');
 }
+

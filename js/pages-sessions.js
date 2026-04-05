@@ -160,11 +160,7 @@ function renderSessions() {
         <table class="data-table sessions-table" id="sessionsTable">
           <thead>
             <tr>
-              <th>Date</th>
-              ${currentUser.role === 'admin' ? '<th>Company</th>' : ''}
-              <th>Facilitator</th>
-              ${currentUser.role === 'admin' ? '<th>Department</th>' : ''}
-              <th>Type</th>
+              <th>Date</th><th>Facilitator</th><th>Department</th><th>Type</th>
               <th>Status</th><th>Attended</th><th>Cups</th><th>Conv%</th>
               <th>Adopted</th><th style="width:40px"></th>
             </tr>
@@ -196,11 +192,10 @@ function buildSessionRow(session) {
         data-status="${status}"
         data-type="${session.sessionType || ''}"
         data-adopt-pct="${adoptPct || 0}"
-        data-search="${(session.companyName + ' ' + session.facilitator + ' ' + session.department + ' ' + session.sessionType).toLowerCase()}">
+        data-search="${(session.facilitator + ' ' + session.department + ' ' + session.sessionType).toLowerCase()}">
       <td>${DB.formatDate(session.sessionDate)}</td>
-      ${currentUser.role === 'admin' ? `<td><span style="font-size:12px;color:var(--rose-light)">${DB.getCompany(session.companyId)?.name || '—'}</span></td>` : ''}
       <td><strong>${session.facilitator || '—'}</strong></td>
-      ${currentUser.role === 'admin' ? `<td style="color:rgba(255,255,255,0.5);font-size:12px">${session.department || '—'}</td>` : ''}
+      <td style="color:rgba(255,255,255,0.5);font-size:12px">${session.department || '—'}</td>
       <td style="font-size:12px">${sessionType}</td>
       <td>${statusPill(status)}</td>
       <td>${session.womenAttended || 0}</td>
