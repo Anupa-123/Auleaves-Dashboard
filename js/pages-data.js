@@ -144,39 +144,75 @@ function renderFollowups() {
   const bens = cid ? DB.getBeneficiariesByCompany(cid) : DB.getBeneficiaries();
   const isAdmin = currentUser.role === 'admin';
 
-  // Use new cycleRecords API (with fallback to old followups for compatibility)
-  let records;
-  if (typeof DB.getCycleRecords === 'function') {
-    records = cid ? DB.getCyclesByCompany(cid) : DB.getCycleRecords();
-  } else {
-    records = cid ? DB.getFollowupsByCompany(cid) : DB.getFollowups();
-  }
+  const allRecords = cid ? DB.getCyclesByCompany(cid) : DB.getCycleRecords();
 
-  const compMap = {}; DB.getCompanies().forEach(c => compMap[c.id] = c.name);
-  const benMap = {}; DB.getBeneficiaries().forEach(b => benMap[b.id] = b);
+  const cycleOptions = (cycleNum) => {
+    if (cycleNum === 1) return [
+      { value: 'pending', label: 'Pending' },
+      { value: 'successful', label: 'Successful' },
+      { value: 'fu-cycle-2', label: 'FU for Cycle 2' }
+    ];
+    if (cycleNum === 2) return [
+      { value: 'pending', label: 'Pending' },
+      { value: 'successful', label: 'Successful' },
+      { value: 'fu-cycle-3', label: 'FU for Cycle 3' }
+    ];
+    return [
+      { value: 'pending', label: 'Pending' },
+      { value: 'adopted', label: 'Adopted' },
+      { value: 'not-adopted', label: 'Not Adopted' }
+    ];
+  };
 
-  // Overdue count
-  const overdueCount = bens.filter(b => {
-    const benRecords = records.filter(r => r.beneficiaryId === b.id);
-    return !benRecords.some(r => (r.cycleNumber === 3 || r.month === 3));
-  }).length;
+  const cycleDot = (status, locked) => {
+    if (locked) return '<div class="cycle-dot" style="background:rgba(255,255,255,0.1)"></div>';
+    const c = status === 'done' || status === 'adopted' || status === 'successful' || status === 'tried-successful' ? '#4CAF50' :
+              status === 'not-adopted' || status === 'stopped' || status === 'other-issues' ? '#EF5350' :
+              status === 'fu-cycle-2' || status === 'fu-cycle-3' ? '#FFB300' : 'rgba(255,255,255,0.2)';
+    return `<div class="cycle-dot" style="background:${c}"></div>`;
+  };
 
-  const rows = records.sort((a,b) => new Date(b.loggedAt || b.timestamp || 0) - new Date(a.loggedAt || a.timestamp || 0)).map(f => {
-    const ben = benMap[f.beneficiaryId];
-    const cycleNum = f.cycleNumber || f.month || '—';
-    const usageStatus = f.usageStatus || f.status || '—';
-    const verified = f.verifiedByAuleaves || f.verified;
-    const recommended = f.recommendedToOthers || '—';
+  const cycleDropdown = (ben, cycleNum, record, status, locked) => {
+    if (locked && !record) {
+      return `<div class="cycle-cell">${cycleDot('locked', true)}<span class="cycle-locked">—</span></div>`;
+    }
+    const options = cycleOptions(cycleNum);
+    return `<div class="cycle-cell">
+      ${cycleDot(status, false)}
+      <select class="cycle-select" onchange="updateCycleStatusFollowups('${ben.id}','${ben.companyId}',${cycleNum},'${record ? record.id : ''}',this.value)"
+        ${locked ? 'disabled style="opacity:0.35"' : ''}>
+        ${options.map(o => `<option value="${o.value}" ${status===o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
+      </select>
+    </div>`;
+  };
+
+  const rows = bens.sort((a,b) => new Date(b.registeredAt || 0) - new Date(a.registeredAt || 0)).map(ben => {
+    const benRecords = allRecords.filter(r => r.beneficiaryId === ben.id);
+    const c1 = benRecords.find(r => r.cycleNumber === 1);
+    const c2 = benRecords.find(r => r.cycleNumber === 2);
+    const c3 = benRecords.find(r => r.cycleNumber === 3);
+
+    const benStatus = ben.usageStatus || 'not-tried';
+    const c1Status  = c1 ? c1.status : 'pending';
+    const c2Status  = c2 ? c2.status : (c1 && (c1.status === 'done' || c1.status === 'fu-cycle-2' || c1.status === 'successful') ? 'pending' : 'locked');
+    const c3Status  = c3 ? c3.status : (c2 && (c2.status === 'done' || c2.status === 'fu-cycle-3' || c2.status === 'successful') ? 'pending' : 'locked');
+
     return `<tr>
-      <td>${ben ? ben.fcpId : '—'}</td>
-      <td>${ben ? ben.fullName : '—'}</td>
-      <td><span class="badge badge-info">Cycle ${cycleNum}</span></td>
-      <td>${getStatusBadge(usageStatus)}</td>
-      <td>${recommended === 'yes' ? '<span class="badge badge-success">Yes</span>' : recommended === 'no' ? '<span class="badge badge-danger">No</span>' : '<span class="badge badge-muted">Not sure</span>'}</td>
+      <td>${ben.fcpId || '—'}</td>
+      <td>${ben.fullName || '—'}</td>
+      <td>
+        <select class="adoption-select" onchange="updateBenUsageStatusFollowups('${ben.id}', this.value)">
+          <option value="tried-successful" ${benStatus==='tried-successful' ? 'selected' : ''}>Tried but successful</option>
+          <option value="successful"       ${benStatus==='successful' ? 'selected' : ''}>Successful</option>
+          <option value="not-tried"        ${benStatus==='not-tried' ? 'selected' : ''}>Not tried at all</option>
+          <option value="other-issues"     ${benStatus==='other-issues' ? 'selected' : ''}>Other issues</option>
+        </select>
+      </td>
+      <td>${cycleDropdown(ben, 1, c1, c1Status, false)}</td>
+      <td>${cycleDropdown(ben, 2, c2, c2Status, c2Status === 'locked')}</td>
+      <td>${cycleDropdown(ben, 3, c3, c3Status, c3Status === 'locked')}</td>
       <td class="d-flex gap-8 align-center">
-        ${isAdmin && !verified ? `<button class="btn btn-sm btn-sage" onclick="verifyFollowup('${f.id}')">✓ Verify</button>` : ''}
-        <button class="btn-delete-ben" onclick="deleteFollowupRecord('${f.id}','${f.beneficiaryId}')" title="Delete this check-in record">🗑</button>
-        ${ben ? `<button class="btn-delete-ben" onclick="deleteFullBeneficiary('${f.beneficiaryId}')" title="Delete beneficiary completely" style="color:rgba(239,83,80,0.4)">👤✕</button>` : ''}
+        <button class="btn-delete-ben" onclick="deleteFullBeneficiary('${ben.id}')" title="Delete beneficiary completely" style="color:rgba(239,83,80,0.4)">👤✕</button>
       </td>
     </tr>`;
   }).join('');
@@ -190,14 +226,33 @@ function renderFollowups() {
     <div class="table-card">
       <div class="table-toolbar"><div class="toolbar-left">
         <div class="search-wrapper"><input type="text" class="search-input" placeholder="Search..." oninput="filterTable(this, 'fupTable')"></div>
-        <select class="filter-select" onchange="filterFollowupsByMonth(this.value)">
-          <option value="">All Cycles</option><option value="1">Cycle 1</option><option value="2">Cycle 2</option><option value="3">Cycle 3</option>
-        </select>
-      </div><div class="toolbar-right"><span class="text-muted">${records.length} records</span></div></div>
+      </div><div class="toolbar-right"><span class="text-muted">${bens.length} beneficiaries</span></div></div>
       <div class="table-overflow"><table class="data-table" id="fupTable"><thead><tr>
-        <th>FCP ID</th><th>Name</th><th>Cycle</th><th>Status</th><th>Referred</th><th>Actions</th>
-      </tr></thead><tbody>${rows}</tbody></table></div>
+        <th>FCP ID</th><th>Name</th><th>Status</th><th>Cycle 1</th><th>Cycle 2</th><th>Cycle 3</th><th>Actions</th>
+      </tr></thead><tbody>${rows || '<tr><td colspan="7" class="empty-cell">No records found.</td></tr>'}</tbody></table></div>
     </div>`;
+}
+
+// ==== LOCAL UPDATE FUNCTIONS FOR FOLLOWUPS TABLE ====
+function updateBenUsageStatusFollowups(benId, status) {
+  DB.updateBeneficiary(benId, { usageStatus: status });
+  showToast('Usage status updated');
+  navigateTo('followups');
+}
+
+function updateCycleStatusFollowups(benId, companyId, cycleNum, existingRecordId, newStatus) {
+  if (existingRecordId) {
+    DB.updateCycleRecord(existingRecordId, { status: newStatus });
+  } else {
+    const result = DB.addCycleRecord({
+      beneficiaryId: benId, companyId: companyId, sessionId: '',
+      cycleNumber: cycleNum, status: newStatus,
+      loggedBy: currentUser.role, loggedByName: currentUser.name
+    });
+    if (result && result.error) { showToast(result.error, 'error'); return; }
+  }
+  showToast(`Cycle ${cycleNum} updated`);
+  navigateTo('followups');
 }
 
 function getStatusBadge(status) {
