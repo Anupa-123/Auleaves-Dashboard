@@ -13,8 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
   seedDemoData();
   initEmailJS();
   // Check for Supabase auth session
-  if (supabase) {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+  if (_supa) {
+    _supa.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         loadUserProfile(session.user);
       } else {
@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
     // Listen for auth changes (e.g. Google redirect)
-    supabase.auth.onAuthStateChange((event, session) => {
+    _supa.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         loadUserProfile(session.user);
       }
@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Load user profile from Supabase
 async function loadUserProfile(authUser) {
-  const { data: profile } = await supabase
+  const { data: profile } = await _supa
     .from('profiles')
     .select('*')
     .eq('id', authUser.id)
@@ -53,7 +53,7 @@ async function loadUserProfile(authUser) {
   };
 
   if (currentUser.companyId) {
-    const { data: comp } = await supabase.from('companies').select('name').eq('id', currentUser.companyId).single();
+    const { data: comp } = await _supa.from('companies').select('name').eq('id', currentUser.companyId).single();
     if (comp) currentUser.companyName = comp.name;
   }
 
@@ -99,8 +99,8 @@ async function handleSignIn(e) {
   const email = document.getElementById('loginEmail').value.trim();
   const pw = document.getElementById('loginPassword').value.trim();
 
-  if (supabase) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pw });
+  if (_supa) {
+    const { data, error } = await _supa.auth.signInWithPassword({ email, password: pw });
     if (error) {
       showAuthMessage(error.message, 'error');
       return false;
@@ -126,12 +126,12 @@ async function handleSignUp(e) {
   const email = document.getElementById('signupEmail').value.trim();
   const pw = document.getElementById('signupPassword').value.trim();
 
-  if (!supabase) {
+  if (!_supa) {
     showAuthMessage('Sign up requires Supabase connection.', 'error');
     return false;
   }
 
-  const { data, error } = await supabase.auth.signUp({
+  const { data, error } = await _supa.auth.signUp({
     email,
     password: pw,
     options: { data: { full_name: name } }
@@ -150,11 +150,11 @@ async function handleSignUp(e) {
 
 // ---- GOOGLE SIGN IN ----
 async function handleGoogleSignIn() {
-  if (!supabase) {
+  if (!_supa) {
     showAuthMessage('Google Sign-In requires Supabase connection.', 'error');
     return;
   }
-  const { error } = await supabase.auth.signInWithOAuth({
+  const { error } = await _supa.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin + window.location.pathname }
   });
@@ -163,7 +163,7 @@ async function handleGoogleSignIn() {
 
 // ---- LOGOUT ----
 function handleLogout() {
-  if (supabase) { supabase.auth.signOut(); }
+  if (_supa) { _supa.auth.signOut(); }
   DB.logout();
   currentUser = null;
   showLogin();

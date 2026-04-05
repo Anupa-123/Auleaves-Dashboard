@@ -6,13 +6,14 @@ const SUPABASE_URL = 'https://tcslfhyyfswduidsfibt.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjc2xmaHl5ZnN3ZHVpZHNmaWJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyODg5MzIsImV4cCI6MjA5MDg2NDkzMn0.wrQqctgedeY9L8Z10MbGA9dfV_iWNXJr9t2l7Hr4zKw';
 
 // Initialize Supabase client
-const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+// IMPORTANT: Named _supa to avoid conflict with window.supabase (CDN global)
+const _supa = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 // ---- AUTH FUNCTIONS ----
 const Auth = {
   // Sign up with email/password
   async signUp(email, password, fullName) {
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await _supa.auth.signUp({
       email,
       password,
       options: { data: { full_name: fullName } }
@@ -23,14 +24,14 @@ const Auth = {
 
   // Sign in with email/password
   async signIn(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await _supa.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
     return { data };
   },
 
   // Sign in with Google
   async signInWithGoogle() {
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await _supa.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin + window.location.pathname }
     });
@@ -40,12 +41,12 @@ const Auth = {
 
   // Sign out
   async signOut() {
-    await supabase.auth.signOut();
+    await _supa.auth.signOut();
   },
 
   // Get current session
   async getSession() {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await _supa.auth.getSession();
     return session;
   },
 
@@ -53,7 +54,7 @@ const Auth = {
   async getProfile() {
     const session = await this.getSession();
     if (!session) return null;
-    const { data } = await supabase
+    const { data } = await _supa
       .from('profiles')
       .select('*, companies(name)')
       .eq('id', session.user.id)
@@ -63,7 +64,7 @@ const Auth = {
 
   // Listen to auth changes
   onAuthChange(callback) {
-    supabase.auth.onAuthStateChange((event, session) => {
+    _supa.auth.onAuthStateChange((event, session) => {
       callback(event, session);
     });
   }
@@ -73,17 +74,17 @@ const Auth = {
 const SupaDB = {
   // ---- COMPANIES ----
   async getCompanies() {
-    const { data } = await supabase.from('companies').select('*').order('name');
+    const { data } = await _supa.from('companies').select('*').order('name');
     return data || [];
   },
 
   async getCompany(id) {
-    const { data } = await supabase.from('companies').select('*').eq('id', id).single();
+    const { data } = await _supa.from('companies').select('*').eq('id', id).single();
     return data;
   },
 
   async addCompany(company) {
-    const { data, error } = await supabase.from('companies').insert([{
+    const { data, error } = await _supa.from('companies').insert([{
       name: company.name,
       industry: company.industry,
       city: company.city,
@@ -99,7 +100,7 @@ const SupaDB = {
   },
 
   async updateCompany(id, updates) {
-    const { error } = await supabase.from('companies').update({
+    const { error } = await _supa.from('companies').update({
       name: updates.name,
       industry: updates.industry,
       city: updates.city,
@@ -113,19 +114,19 @@ const SupaDB = {
   },
 
   async deleteCompany(id) {
-    await supabase.from('companies').delete().eq('id', id);
+    await _supa.from('companies').delete().eq('id', id);
   },
 
   // ---- SESSIONS ----
   async getSessions(companyId) {
-    let q = supabase.from('sessions').select('*').order('session_date', { ascending: false });
+    let q = _supa.from('sessions').select('*').order('session_date', { ascending: false });
     if (companyId) q = q.eq('company_id', companyId);
     const { data } = await q;
     return data || [];
   },
 
   async addSession(session) {
-    const { data, error } = await supabase.from('sessions').insert([{
+    const { data, error } = await _supa.from('sessions').insert([{
       company_id: session.companyId,
       session_date: session.sessionDate,
       facilitator: session.facilitator,
@@ -151,19 +152,19 @@ const SupaDB = {
 
   // ---- BENEFICIARIES ----
   async getBeneficiaries(companyId) {
-    let q = supabase.from('beneficiaries').select('*').order('created_at', { ascending: false });
+    let q = _supa.from('beneficiaries').select('*').order('created_at', { ascending: false });
     if (companyId) q = q.eq('company_id', companyId);
     const { data } = await q;
     return data || [];
   },
 
   async getBeneficiary(id) {
-    const { data } = await supabase.from('beneficiaries').select('*').eq('id', id).single();
+    const { data } = await _supa.from('beneficiaries').select('*').eq('id', id).single();
     return data;
   },
 
   async addBeneficiary(ben) {
-    const { data, error } = await supabase.from('beneficiaries').insert([{
+    const { data, error } = await _supa.from('beneficiaries').insert([{
       company_id: ben.companyId,
       session_id: ben.sessionId || null,
       full_name: ben.fullName,
@@ -182,26 +183,26 @@ const SupaDB = {
 
   // ---- FOLLOW-UPS ----
   async getFollowups(companyId) {
-    let q = supabase.from('followups').select('*').order('created_at', { ascending: false });
+    let q = _supa.from('followups').select('*').order('created_at', { ascending: false });
     if (companyId) q = q.eq('company_id', companyId);
     const { data } = await q;
     return data || [];
   },
 
   async getFollowupsByBeneficiary(benId) {
-    const { data } = await supabase.from('followups').select('*')
+    const { data } = await _supa.from('followups').select('*')
       .eq('beneficiary_id', benId).order('month');
     return data || [];
   },
 
   async addFollowup(fu) {
     // Check for duplicate
-    const { data: existing } = await supabase.from('followups')
+    const { data: existing } = await _supa.from('followups')
       .select('id').eq('beneficiary_id', fu.beneficiaryId).eq('month', fu.month);
     if (existing && existing.length > 0) {
       return { error: `Month ${fu.month} follow-up already exists for this beneficiary.` };
     }
-    const { data, error } = await supabase.from('followups').insert([{
+    const { data, error } = await _supa.from('followups').insert([{
       beneficiary_id: fu.beneficiaryId,
       company_id: fu.companyId,
       month: fu.month,
@@ -222,7 +223,7 @@ const SupaDB = {
   },
 
   async verifyFollowup(id, verifierName) {
-    await supabase.from('followups').update({
+    await _supa.from('followups').update({
       verified: true,
       verified_by: verifierName,
       verified_at: new Date().toISOString()
@@ -231,13 +232,13 @@ const SupaDB = {
 
   // ---- NOTIFICATIONS ----
   async getNotifications() {
-    const { data } = await supabase.from('notifications').select('*')
+    const { data } = await _supa.from('notifications').select('*')
       .order('created_at', { ascending: false }).limit(50);
     return data || [];
   },
 
   async addNotification(type, message, actor, companyId, companyName) {
-    await supabase.from('notifications').insert([{
+    await _supa.from('notifications').insert([{
       type, message, actor,
       company_id: companyId,
       company_name: companyName
@@ -245,15 +246,15 @@ const SupaDB = {
   },
 
   async markNotificationRead(id) {
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+    await _supa.from('notifications').update({ is_read: true }).eq('id', id);
   },
 
   async markAllRead() {
-    await supabase.from('notifications').update({ is_read: true }).eq('is_read', false);
+    await _supa.from('notifications').update({ is_read: true }).eq('is_read', false);
   },
 
   async getUnreadCount() {
-    const { count } = await supabase.from('notifications')
+    const { count } = await _supa.from('notifications')
       .select('*', { count: 'exact', head: true }).eq('is_read', false);
     return count || 0;
   },
