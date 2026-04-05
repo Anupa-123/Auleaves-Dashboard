@@ -170,11 +170,9 @@ function renderFollowups() {
     return `<tr>
       <td>${ben ? ben.fcpId : '—'}</td>
       <td>${ben ? ben.fullName : '—'}</td>
-      <td>${compMap[f.companyId] || '—'}</td>
       <td><span class="badge badge-info">Cycle ${cycleNum}</span></td>
       <td>${getStatusBadge(usageStatus)}</td>
       <td>${recommended === 'yes' ? '<span class="badge badge-success">Yes</span>' : recommended === 'no' ? '<span class="badge badge-danger">No</span>' : '<span class="badge badge-muted">Not sure</span>'}</td>
-      <td>${verified ? '<span class="badge badge-success">✓ Verified</span>' : '<span class="badge badge-warning">Pending</span>'}</td>
       <td class="d-flex gap-8 align-center">
         ${isAdmin && !verified ? `<button class="btn btn-sm btn-sage" onclick="verifyFollowup('${f.id}')">✓ Verify</button>` : ''}
         <button class="btn-delete-ben" onclick="deleteFollowupRecord('${f.id}','${f.beneficiaryId}')" title="Delete this check-in record">🗑</button>
@@ -197,7 +195,7 @@ function renderFollowups() {
         </select>
       </div><div class="toolbar-right"><span class="text-muted">${records.length} records</span></div></div>
       <div class="table-overflow"><table class="data-table" id="fupTable"><thead><tr>
-        <th>FCP ID</th><th>Name</th><th>Company</th><th>Cycle</th><th>Status</th><th>Referred</th><th>Verified</th><th>Actions</th>
+        <th>FCP ID</th><th>Name</th><th>Cycle</th><th>Status</th><th>Referred</th><th>Actions</th>
       </tr></thead><tbody>${rows}</tbody></table></div>
     </div>`;
 }
