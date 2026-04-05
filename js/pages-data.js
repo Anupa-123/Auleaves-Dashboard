@@ -186,6 +186,7 @@ function renderFollowups() {
   return `<div class="page-header"><h1>Follow-up Check-ins</h1>
     <div class="d-flex gap-8">
       <button class="btn btn-primary" onclick="showAddFollowupModal()">+ Submit Check-in</button>
+      <button class="btn btn-secondary" onclick="showExcelImportModal()">📥 Import from Excel</button>
       ${overdueCount > 0 ? `<span class="badge badge-warning" style="font-size:12px;padding:6px 12px">⚠ ${overdueCount} overdue (no Cycle 3)</span>` : ''}
     </div></div>
     <div class="table-card">
@@ -205,6 +206,10 @@ function getStatusBadge(status) {
   const map = {
     'using comfortably': 'badge-success',
     'using with some issues': 'badge-warning',
+    'tried-successful': 'badge-success',
+    'successful': 'badge-success',
+    'not-tried': 'badge-muted',
+    'other-issues': 'badge-warning',
     'done': 'badge-success',
     'stopped': 'badge-danger',
     'stopped — discomfort': 'badge-danger',
@@ -212,7 +217,10 @@ function getStatusBadge(status) {
     'not yet tried': 'badge-muted',
     'not-adopted': 'badge-danger',
     'pending': 'badge-muted',
-    'lost/needs replacement': 'badge-danger'
+    'lost/needs replacement': 'badge-danger',
+    'adopted': 'badge-success',
+    'fu for cycle 2': 'badge-info',
+    'fu for cycle 3': 'badge-info'
   };
   return `<span class="badge ${map[status] || 'badge-muted'}">${status}</span>`;
 }
@@ -245,7 +253,7 @@ function showAddFollowupModal() {
             <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#E91E72;margin-bottom:12px;font-weight:600">New Beneficiary Details</div>
             <div class="form-grid">
               <div class="form-group"><label>Full Name <span class="required">*</span></label><input type="text" class="form-control" id="fu_new_name" placeholder="Full name"></div>
-              <div class="form-group"><label>Phone <span class="required">*</span></label><input type="tel" class="form-control" id="fu_new_phone" placeholder="10-digit number"></div>
+              <div class="form-group"><label>Phone</label><input type="tel" class="form-control" id="fu_new_phone" placeholder="Optional"></div>
               <div class="form-group"><label>Age Group</label>
                 <select class="form-control" id="fu_new_age"><option value="18-24">18–24</option><option value="25-34" selected>25–34</option><option value="35-44">35–44</option><option value="45+">45+</option></select></div>
               <div class="form-group"><label>Cup Size</label>
@@ -264,10 +272,10 @@ function showAddFollowupModal() {
           <input type="date" class="form-control" id="fu_date" value="${new Date().toISOString().split('T')[0]}"></div>
         <div class="form-group full-width"><label>Usage Status <span class="required">*</span></label>
           <select class="form-control" id="fu_status" required>
-            <option value="using comfortably">Using comfortably</option>
-            <option value="using with some issues">Using with some issues</option>
-            <option value="stopped">Stopped</option>
-            <option value="not yet tried">Not yet tried</option>
+            <option value="tried-successful">Tried but successful</option>
+            <option value="successful">Successful</option>
+            <option value="not-tried">Not tried at all</option>
+            <option value="other-issues">Other issues</option>
           </select></div>
         <div class="form-group"><label>Recommended to Others?</label>
           <select class="form-control" id="fu_recommend"><option value="yes">Yes</option><option value="no">No</option><option value="not sure">Not sure</option></select></div>
@@ -298,8 +306,8 @@ function submitFollowup(e) {
   // If "Register New" was selected, create beneficiary first
   if (benId === '__new__') {
     const name  = document.getElementById('fu_new_name')?.value?.trim();
-    const phone = document.getElementById('fu_new_phone')?.value?.trim();
-    if (!name || !phone) { showToast('Name and phone are required for new beneficiary', 'error'); return false; }
+    const phone = document.getElementById('fu_new_phone')?.value?.trim() || '';
+    if (!name) { showToast('Name is required for new beneficiary', 'error'); return false; }
 
     const cid = getCompanyId();
     ben = DB.addBeneficiary({
@@ -411,4 +419,181 @@ function deleteFullBeneficiary(benId) {
 
   showToast(`${ben.fullName} deleted completely`);
   navigateTo('followups');
+}
+
+// ============================================================
+// EXCEL / CSV IMPORT
+// ============================================================
+function showExcelImportModal() {
+  openModal('📥 Import Follow-up Data from Excel', `
+    <div style="margin-bottom:16px">
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px">
+        Upload a CSV or Excel (.csv) file with beneficiary follow-up data.<br>
+        Existing entries will be matched by <strong>Name</strong>. New names will be registered as new beneficiaries.
+        Columns with no data will be left blank.
+      </p>
+      <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:16px;margin-bottom:16px">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:8px;font-weight:600">Expected CSV Columns</div>
+        <code style="color:#C2185B;font-size:12px;word-break:break-all">Name, Phone, Cup Size, Age Group, First Time, Cycle 1 Status, Cycle 2 Status, Cycle 3 Status, Notes</code>
+        <div style="margin-top:8px;font-size:11px;color:rgba(255,255,255,0.4)">
+          Status values: Tried but successful, Successful, Not tried at all, Other issues, Adopted, Not Adopted<br>
+          Only "Name" is required. All other columns are optional.
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Select CSV File <span class="required">*</span></label>
+        <input type="file" class="form-control" id="importFile" accept=".csv,.txt" style="padding:10px">
+      </div>
+    </div>
+    <div id="importPreview" style="display:none;margin-bottom:16px">
+      <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#4CAF50;margin-bottom:8px;font-weight:600">Preview</div>
+      <div id="importPreviewContent" style="max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.2);border-radius:8px;padding:12px;font-size:12px"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-secondary" onclick="previewImport()">👁 Preview</button>
+      <button class="btn btn-primary" onclick="processImport()">📥 Import Data</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>`);
+}
+
+function parseCSV(text) {
+  const lines = text.split(/\\r?\\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  return lines.slice(1).map(line => {
+    const vals = line.split(',').map(v => v.trim().replace(/^\"|\"$/g, ''));
+    const row = {};
+    headers.forEach((h, i) => row[h] = vals[i] || '');
+    return row;
+  });
+}
+
+function previewImport() {
+  const file = document.getElementById('importFile')?.files?.[0];
+  if (!file) { showToast('Please select a CSV file first', 'error'); return; }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const rows = parseCSV(e.target.result);
+    if (rows.length === 0) { showToast('No data found in file', 'error'); return; }
+
+    const previewDiv = document.getElementById('importPreview');
+    const contentDiv = document.getElementById('importPreviewContent');
+    previewDiv.style.display = 'block';
+
+    const cid = getCompanyId();
+    const existingBens = cid ? DB.getBeneficiariesByCompany(cid) : DB.getBeneficiaries();
+    const existingNames = existingBens.map(b => b.fullName.toLowerCase());
+
+    let html = `<div style="color:rgba(255,255,255,0.6);margin-bottom:8px">${rows.length} rows found</div>`;
+    html += '<table style="width:100%;font-size:11px;border-collapse:collapse">';
+    html += '<tr style="color:var(--text-muted)"><th style="text-align:left;padding:4px">Name</th><th>Status</th><th>C1</th><th>C2</th><th>C3</th></tr>';
+    rows.forEach(r => {
+      const name = r['name'] || r['full name'] || r['fullname'] || '';
+      const isExisting = existingNames.includes(name.toLowerCase());
+      html += `<tr style="border-top:1px solid rgba(255,255,255,0.05)">
+        <td style="padding:4px">${name} ${isExisting ? '<span style="color:#4CAF50;font-size:10px">✓ exists</span>' : '<span style="color:#FFB300;font-size:10px">+ new</span>'}</td>
+        <td style="padding:4px;color:rgba(255,255,255,0.5)">${r['cycle 1 status'] || r['c1'] || '—'}</td>
+        <td style="padding:4px;color:rgba(255,255,255,0.5)">${r['cycle 2 status'] || r['c2'] || '—'}</td>
+        <td style="padding:4px;color:rgba(255,255,255,0.5)">${r['cycle 3 status'] || r['c3'] || '—'}</td>
+      </tr>`;
+    });
+    html += '</table>';
+    contentDiv.innerHTML = html;
+  };
+  reader.readAsText(file);
+}
+
+function processImport() {
+  const file = document.getElementById('importFile')?.files?.[0];
+  if (!file) { showToast('Please select a CSV file first', 'error'); return; }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const rows = parseCSV(e.target.result);
+    if (rows.length === 0) { showToast('No data found', 'error'); return; }
+
+    const cid = getCompanyId();
+    const existingBens = cid ? DB.getBeneficiariesByCompany(cid) : DB.getBeneficiaries();
+    let imported = 0, skipped = 0;
+
+    rows.forEach(r => {
+      const name = r['name'] || r['full name'] || r['fullname'] || '';
+      if (!name) { skipped++; return; }
+
+      // Find or create beneficiary
+      let ben = existingBens.find(b => b.fullName.toLowerCase() === name.toLowerCase());
+      if (!ben) {
+        ben = DB.addBeneficiary({
+          companyId: cid,
+          sessionId: '',
+          fullName: name,
+          phone: r['phone'] || '',
+          ageGroup: r['age group'] || r['age'] || '25-34',
+          cupSize: (r['cup size'] || r['cup'] || 'medium').toLowerCase(),
+          firstTimeUser: (r['first time'] || 'yes').toLowerCase() === 'yes',
+          language: r['language'] || 'Hindi',
+          consentRecordedBy: currentUser.name,
+          consentDate: new Date().toISOString().split('T')[0],
+          registeredBy: currentUser.role
+        });
+        existingBens.push(ben);
+      }
+
+      // Process cycle statuses
+      const cycleFields = [
+        { num: 1, keys: ['cycle 1 status', 'c1', 'cycle1'] },
+        { num: 2, keys: ['cycle 2 status', 'c2', 'cycle2'] },
+        { num: 3, keys: ['cycle 3 status', 'c3', 'cycle3'] }
+      ];
+
+      cycleFields.forEach(cf => {
+        let val = '';
+        cf.keys.forEach(k => { if (r[k]) val = r[k]; });
+        if (!val) return; // Skip blank columns
+
+        // Map status text to internal values
+        const statusMap = {
+          'tried but successful': 'tried-successful',
+          'successful': 'successful',
+          'not tried at all': 'not-tried',
+          'not tried': 'not-tried',
+          'other issues': 'other-issues',
+          'fu for cycle 2': 'done',
+          'fu for cycle 3': 'done',
+          'adopted': 'done',
+          'not adopted': 'not-adopted'
+        };
+        const mappedStatus = statusMap[val.toLowerCase()] || val.toLowerCase();
+
+        // Check if cycle record already exists
+        const existing = DB.getCycleRecords().find(
+          cr => cr.beneficiaryId === ben.id && cr.cycleNumber === cf.num
+        );
+        if (!existing) {
+          DB.addCycleRecord({
+            beneficiaryId: ben.id,
+            companyId: cid,
+            cycleNumber: cf.num,
+            status: mappedStatus,
+            usageStatus: val,
+            loggedByName: currentUser.name,
+            loggedBy: currentUser.role
+          });
+        }
+      });
+
+      // Save notes if present
+      if (r['notes']) {
+        DB.updateBeneficiary(ben.id, { notes: r['notes'] });
+      }
+
+      imported++;
+    });
+
+    closeModal();
+    showToast(`✅ Imported ${imported} records${skipped > 0 ? `, ${skipped} skipped (no name)` : ''}`);
+    navigateTo('followups');
+  };
+  reader.readAsText(file);
 }

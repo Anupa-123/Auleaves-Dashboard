@@ -147,7 +147,7 @@ function renderSessions() {
 
   const isAdmin = currentUser.role === 'admin';
   const tableRows = sessions.map(session => buildSessionRow(session, isAdmin)).join('');
-  const colCount = isAdmin ? 10 : 9;
+  const colCount = isAdmin ? 8 : 7;
 
   return `
     <div class="page-header" style="margin-bottom:0">
@@ -162,8 +162,8 @@ function renderSessions() {
         <table class="data-table sessions-table" id="sessionsTable">
           <thead>
             <tr>
-              <th>Date</th><th>Facilitator</th>${isAdmin ? '<th>Department</th>' : ''}<th>Type</th>
-              <th>Status</th><th>Attended</th><th>Cups</th><th>Conv%</th>
+              <th>Date</th><th>Facilitator</th>${isAdmin ? '<th>Department</th>' : ''}
+              <th>Status</th><th>Cups</th><th>Conv%</th>
               <th>Adopted</th><th style="width:40px"></th>
             </tr>
           </thead>
@@ -184,11 +184,7 @@ function buildSessionRow(session, isAdmin) {
   const adoptPct = stats.total > 0 ? ((stats.adopted / stats.total) * 100).toFixed(0) : null;
   const adoptColor = adoptPct === null ? 'rgba(255,255,255,0.3)'
     : adoptPct >= 70 ? '#4CAF50' : adoptPct >= 40 ? '#FFB300' : '#EF5350';
-
-  const sessionType = session.sessionType
-    ? session.sessionType.split(' ').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')
-    : '—';
-  const colCount = isAdmin ? 10 : 9;
+  const colCount = isAdmin ? 8 : 7;
 
   return `
     <tr class="session-row" id="sr-${session.id}"
@@ -199,9 +195,7 @@ function buildSessionRow(session, isAdmin) {
       <td>${DB.formatDate(session.sessionDate)}</td>
       <td><strong>${session.facilitator || '—'}</strong></td>
       ${isAdmin ? `<td style="color:rgba(255,255,255,0.5);font-size:12px">${session.department || '—'}</td>` : ''}
-      <td style="font-size:12px">${sessionType}</td>
       <td>${statusPill(status)}</td>
-      <td>${session.womenAttended || 0}</td>
       <td>${session.cupsPurchased || 0}</td>
       <td style="color:rgba(255,255,255,0.6)">${conv}%</td>
       <td>
@@ -334,17 +328,39 @@ function buildParticipantRow(ben, allRecords) {
   const adoptionStatus = DB._getBenAdoptionStatus(ben.id, allRecords);
   const showReason     = adoptionStatus === 'not-adopted';
 
+  const cycleOptions = (cycleNum) => {
+    if (cycleNum === 1) return [
+      { value: 'pending', label: 'Pending' },
+      { value: 'tried-successful', label: 'Tried but successful' },
+      { value: 'successful', label: 'Successful' },
+      { value: 'not-tried', label: 'Not tried at all' },
+      { value: 'other-issues', label: 'Other issues' },
+      { value: 'done', label: 'FU for Cycle 2' }
+    ];
+    if (cycleNum === 2) return [
+      { value: 'pending', label: 'Pending' },
+      { value: 'successful', label: 'Successful' },
+      { value: 'not-tried', label: 'Not tried at all' },
+      { value: 'other-issues', label: 'Other issues' },
+      { value: 'done', label: 'FU for Cycle 3' }
+    ];
+    return [
+      { value: 'pending', label: 'Pending' },
+      { value: 'done', label: 'Adopted' },
+      { value: 'not-adopted', label: 'Not Adopted' }
+    ];
+  };
+
   const cycleDropdown = (cycleNum, record, status, locked) => {
     if (locked && !record) {
       return `<div class="cycle-cell">${cycleDot('locked', true)}<span class="cycle-locked">—</span></div>`;
     }
+    const options = cycleOptions(cycleNum);
     return `<div class="cycle-cell">
       ${cycleDot(status, false)}
       <select class="cycle-select" onchange="updateCycleStatus('${ben.id}','${ben.companyId}','${ben.sessionId}',${cycleNum},'${record ? record.id : ''}',this.value)"
         ${locked ? 'disabled style="opacity:0.35"' : ''}>
-        <option value="pending"      ${status==='pending'      ? 'selected' : ''}>Pending</option>
-        <option value="done"         ${status==='done'         ? 'selected' : ''}>Done</option>
-        <option value="not-adopted"  ${status==='not-adopted'  ? 'selected' : ''}>Not Adopted</option>
+        ${options.map(o => `<option value="${o.value}" ${status===o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
       </select>
     </div>`;
   };
@@ -406,8 +422,8 @@ function showAddParticipantForm(sessionId) {
           <input type="text" class="form-control" id="ip_name_${sessionId}" placeholder="Full name" required>
         </div>
         <div class="form-group">
-          <label>Phone <span class="required">*</span></label>
-          <input type="tel" class="form-control" id="ip_phone_${sessionId}" placeholder="10-digit number" required>
+          <label>Phone</label>
+          <input type="tel" class="form-control" id="ip_phone_${sessionId}" placeholder="Optional">
         </div>
         <div class="form-group">
           <label>Age Group</label>
@@ -473,8 +489,8 @@ function showAddParticipantForm(sessionId) {
 function saveParticipantWithConsent(sessionId) {
   const g  = id => document.getElementById(id + '_' + sessionId);
   const name  = g('ip_name')?.value?.trim();
-  const phone = g('ip_phone')?.value?.trim();
-  if (!name || !phone) { showToast('Name and phone are required', 'error'); return; }
+  const phone = g('ip_phone')?.value?.trim() || '';
+  if (!name) { showToast('Name is required', 'error'); return; }
 
   const session = DB.getSession(sessionId);
   DB.addBeneficiary({
