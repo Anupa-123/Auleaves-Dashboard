@@ -9,7 +9,6 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23C2185B'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18'>🌸</text></svg>">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -21,46 +20,19 @@
       <h1>Auleaves</h1>
       <p>Freedom Circle Program</p>
     </div>
-
-    <!-- Auth Tabs -->
-    <div class="auth-tabs">
-      <button class="auth-tab active" id="tabSignIn" onclick="switchAuthTab('signin')">Sign In</button>
-      <button class="auth-tab" id="tabSignUp" onclick="switchAuthTab('signup')">Sign Up</button>
-    </div>
-
-    <div id="authMessage" class="auth-message"></div>
-
-    <!-- SIGN IN FORM -->
-    <form id="signInForm" class="login-form" onsubmit="return handleSignIn(event)">
+    <div id="loginError" class="login-error">Invalid credentials. Please try again.</div>
+    <form class="login-form" onsubmit="return handleLogin(event)">
       <div class="form-group">
-        <label for="loginEmail">Email</label>
-        <input type="email" id="loginEmail" placeholder="Enter your email" required autocomplete="email">
+        <label for="loginId">Login ID</label>
+        <input type="text" id="loginId" placeholder="Enter your login ID" required autocomplete="username">
       </div>
       <div class="form-group">
         <label for="loginPassword">Password</label>
         <input type="password" id="loginPassword" placeholder="Enter password" required autocomplete="current-password">
       </div>
-      <button type="submit" class="btn-login" id="btnSignIn">Sign In</button>
+      <button type="submit" class="btn-login" id="btnLogin">Sign In</button>
     </form>
 
-    <!-- SIGN UP FORM -->
-    <form id="signUpForm" class="login-form hidden" onsubmit="return handleSignUp(event)">
-      <div class="form-group">
-        <label for="signupName">Full Name</label>
-        <input type="text" id="signupName" placeholder="Your full name" required>
-      </div>
-      <div class="form-group">
-        <label for="signupEmail">Email</label>
-        <input type="email" id="signupEmail" placeholder="Your email address" required autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label for="signupPassword">Password</label>
-        <input type="password" id="signupPassword" placeholder="Min 6 characters" required minlength="6" autocomplete="new-password">
-      </div>
-      <button type="submit" class="btn-login" id="btnSignUp">Create Account</button>
-    </form>
-
-    <p class="auth-footer">Powered by <a href="https://www.auleaves.com" target="_blank">Auleaves</a> · Menstrual Health Impact</p>
   </div>
 </div>
 
@@ -217,7 +189,6 @@
   <p>CSR Impact Report — www.auleaves.com</p>
 </div>
 
-<script src="js/supabase-client.js"></script>
 <script src="js/database.js"></script>
 <script src="js/seed.js"></script>
 <script src="js/email.js"></script>

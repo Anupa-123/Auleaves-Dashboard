@@ -259,9 +259,6 @@ const DB = {
     try { return JSON.parse(localStorage.getItem(this.KEYS.currentUser)); }
     catch { return null; }
   },
-  setCurrentUser(user) {
-    localStorage.setItem(this.KEYS.currentUser, JSON.stringify(user));
-  },
   login(loginId, password) {
     // Admin login
     if (loginId === 'admin' && password === 'auleaves2026') {
