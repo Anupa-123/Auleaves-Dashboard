@@ -175,8 +175,10 @@ function renderFollowups() {
       <td>${getStatusBadge(usageStatus)}</td>
       <td>${recommended === 'yes' ? '<span class="badge badge-success">Yes</span>' : recommended === 'no' ? '<span class="badge badge-danger">No</span>' : '<span class="badge badge-muted">Not sure</span>'}</td>
       <td>${verified ? '<span class="badge badge-success">✓ Verified</span>' : '<span class="badge badge-warning">Pending</span>'}</td>
-      <td>
+      <td class="d-flex gap-8 align-center">
         ${isAdmin && !verified ? `<button class="btn btn-sm btn-sage" onclick="verifyFollowup('${f.id}')">✓ Verify</button>` : ''}
+        <button class="btn-delete-ben" onclick="deleteFollowupRecord('${f.id}','${f.beneficiaryId}')" title="Delete this check-in record">🗑</button>
+        ${ben ? `<button class="btn-delete-ben" onclick="deleteFullBeneficiary('${f.beneficiaryId}')" title="Delete beneficiary completely" style="color:rgba(239,83,80,0.4)">👤✕</button>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -373,3 +375,40 @@ function verifyFollowup(id) {
   navigateTo('followups');
 }
 
+// ---- DELETE FUNCTIONS ----
+function deleteFollowupRecord(recordId, benId) {
+  if (!confirm('Delete this check-in record? This cannot be undone.')) return;
+
+  // Delete from cycle records
+  if (typeof DB.getCycleRecords === 'function') {
+    const records = DB.getCycleRecords().filter(r => r.id !== recordId);
+    DB._set(DB.KEYS.cycleRecords, records);
+  }
+
+  showToast('Check-in record deleted');
+  navigateTo('followups');
+}
+
+function deleteFullBeneficiary(benId) {
+  const ben = DB.getBeneficiary(benId);
+  if (!ben) { showToast('Beneficiary not found', 'error'); return; }
+  if (!confirm(`Delete "${ben.fullName}" (${ben.fcpId}) and ALL their records? This cannot be undone.`)) return;
+
+  // Delete cycle records
+  if (typeof DB.getCycleRecords === 'function') {
+    const records = DB.getCycleRecords().filter(r => r.beneficiaryId !== benId);
+    DB._set(DB.KEYS.cycleRecords, records);
+  }
+
+  // Delete WhatsApp log
+  if (typeof DB.getWhatsappLog === 'function') {
+    const waLog = DB.getWhatsappLog().filter(l => l.beneficiaryId !== benId);
+    DB._set(DB.KEYS.whatsappLog, waLog);
+  }
+
+  // Delete beneficiary
+  DB.deleteBeneficiary(benId);
+
+  showToast(`${ben.fullName} deleted completely`);
+  navigateTo('followups');
+}
