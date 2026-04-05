@@ -457,11 +457,11 @@ function showExcelImportModal() {
 }
 
 function parseCSV(text) {
-  const lines = text.split(/\\r?\\n/).filter(l => l.trim());
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
   const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
   return lines.slice(1).map(line => {
-    const vals = line.split(',').map(v => v.trim().replace(/^\"|\"$/g, ''));
+    const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
     const row = {};
     headers.forEach((h, i) => row[h] = vals[i] || '');
     return row;

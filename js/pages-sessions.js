@@ -147,7 +147,7 @@ function renderSessions() {
 
   const isAdmin = currentUser.role === 'admin';
   const tableRows = sessions.map(session => buildSessionRow(session, isAdmin)).join('');
-  const colCount = isAdmin ? 8 : 7;
+  const colCount = isAdmin ? 5 : 4;
 
   return `
     <div class="page-header" style="margin-bottom:0">
@@ -163,8 +163,7 @@ function renderSessions() {
           <thead>
             <tr>
               <th>Date</th><th>Facilitator</th>${isAdmin ? '<th>Department</th>' : ''}
-              <th>Status</th><th>Cups</th><th>Conv%</th>
-              <th>Adopted</th><th style="width:40px"></th>
+              <th>Status</th><th style="width:40px"></th>
             </tr>
           </thead>
           <tbody id="sessionsBody">
@@ -184,7 +183,7 @@ function buildSessionRow(session, isAdmin) {
   const adoptPct = stats.total > 0 ? ((stats.adopted / stats.total) * 100).toFixed(0) : null;
   const adoptColor = adoptPct === null ? 'rgba(255,255,255,0.3)'
     : adoptPct >= 70 ? '#4CAF50' : adoptPct >= 40 ? '#FFB300' : '#EF5350';
-  const colCount = isAdmin ? 8 : 7;
+  const colCount = isAdmin ? 5 : 4;
 
   return `
     <tr class="session-row" id="sr-${session.id}"
@@ -196,13 +195,6 @@ function buildSessionRow(session, isAdmin) {
       <td><strong>${session.facilitator || '—'}</strong></td>
       ${isAdmin ? `<td style="color:rgba(255,255,255,0.5);font-size:12px">${session.department || '—'}</td>` : ''}
       <td>${statusPill(status)}</td>
-      <td>${session.cupsPurchased || 0}</td>
-      <td style="color:rgba(255,255,255,0.6)">${conv}%</td>
-      <td>
-        ${stats.total > 0
-          ? `<span style="color:${adoptColor};font-weight:600">${stats.adopted}<span style="color:rgba(255,255,255,0.35);font-weight:400">/${stats.total}</span></span>`
-          : '<span style="color:rgba(255,255,255,0.2)">—</span>'}
-      </td>
       <td>
         <button class="expand-btn" id="expand-btn-${session.id}"
           onclick="toggleSessionExpand('${session.id}')" title="Expand participants">▼</button>
